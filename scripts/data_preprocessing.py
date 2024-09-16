@@ -46,6 +46,7 @@ def preprocessing(raw_path, processed_path):
     face = image.crop((vertices[0].x, vertices[1].y,
                       vertices[2].x, vertices[3].y))
 
+    face = face.resize((224, 224))
     face.save(processed_path)
 
 
@@ -53,9 +54,9 @@ if __name__ == '__main__':
     raw_paths = glob.glob(os.path.join(
         RAW_DIR, '**', '*.*'), recursive=True)
 
-    for raw_path in raw_paths:
-        folder = raw_path.split('\\')[1]
-        filename = raw_path.split('\\')[2]
+    for path in raw_paths:
+        filename = os.path.basename(path)
+        folder = os.path.basename(os.path.dirname(path))
 
         processed_folder = os.path.join(PROCESSED_DIR, folder)
         if not os.path.exists(processed_folder):
@@ -63,4 +64,4 @@ if __name__ == '__main__':
 
         processed_path = os.path.join(processed_folder, filename)
 
-        preprocessing(raw_path, processed_path)
+        preprocessing(path, processed_path)

@@ -1,14 +1,18 @@
 import torch
-from PIL import Image
 from torch import nn, optim
 from torchvision import transforms, datasets
-from torch.utils.data import DataLoader, random_split
-from scripts.train import train
-from models.model_architecture import classifyModel
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.utils.data import DataLoader
 
-DATA_DIR = 'data/processed/'
-EPOCHS = 20
-BATCH_SIZE = 1
+from models.model_architecture import FaceNet, SiameseNetwork
+from scripts.train import train
+from scripts.dataset import get_dataset
+
+from PIL import Image
+
+DATA_DIR = 'data/data.txt'
+EPOCHS = 50
+BATCH_SIZE = 128
 LEARNING_RATE = 0.001
 NUM_WORKERS = 8
 NUM_CLASSES = 3
@@ -16,32 +20,33 @@ NUM_CLASSES = 3
 torch.manual_seed(12)
 
 if __name__ == '__main__':
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    print(f"{device} is available")
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                             std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.5, 0.5, 0.5],
+                             std=[0.5, 0.5, 0.5])
     ])
 
-    dataset = datasets.ImageFolder(DATA_DIR, transform=transform)
-    train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
+    train_set, val_set = get_dataset(DATA_DIR, transform=transform)
 
-    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE,
-                              shuffle=True, num_workers=NUM_WORKERS)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE,
-                            shuffle=False, num_workers=NUM_WORKERS)
+    train_loader = DataLoader(train_set, shuffle=True, batch_size=BATCH_SIZE)
+    val_loader = DataLoader(val_set, shuffle=False, batch_size=BATCH_SIZE)
 
-    c = [0, 0, 0]
-    for images, labels in train_loader:
-        c[labels[0].numpy()] += 1
-    print(c)
+    facenet = FaceNet().to(device)
+    siamese = SiameseNetwork().to(device)
 
-# model = classifyModel(num_classes=NUM_CLASSES)
+    criterion = nn.BCELoss()
+    optimizer = optim.Adam(siamese.parameters(), lr=LEARNING_RATE)
+    scheduler = ReduceLROnPlateau(
+        optimizer, 'min', patience=2, factor=0.1)
 
-# criterion = nn.CrossEntropyLoss()
-# optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
-
-# model, history = train(model, train_loader, val_loader,
-#                        epochs=EPOCHS, criterion=criterion, optimizer=optimizer)
+    train(model=siamese,
+          train_loader=train_loader,
+          val_loader=val_loader,
+          epochs=EPOCHS,
+          criterion=criterion,
+          optimizer=optimizer,
+          scheduler=scheduler)
